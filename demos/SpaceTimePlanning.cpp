@@ -45,6 +45,7 @@
 #include <yaml-cpp/yaml.h>
 #include "common.h"
 #include "SharedEnv.h"
+#include "ConstraintTable.h"
 #include "constraint/ConstrainedPlanningCommon.h"
 
 using namespace std;
@@ -55,7 +56,8 @@ namespace og = ompl::geometric;
 /**
  * Demonstration of planning through space time using the Animation state space and the SpaceTimeRRT* planner.
  */
-shared_ptr<SharedEnv> env;
+SharedEnv* env_ptr;
+ConstraintTable* constraint_table_ptr;
 string benchmarkPath;
 string solutionPath;
 string dataPath;
@@ -75,16 +77,43 @@ bool isStateValid(const ob::State *state)
     // check validity of state defined by pos & t (e.g. check if constraints are satisfied)...
     Point point = make_tuple(x, y);
     // check area constraints
-    if (x < 0 || x > width || y < 0 || y > height) {
+    if (x < env_ptr->radii[0] || x > width - env_ptr->radii[0] || y < env_ptr->radii[0] || y > height - env_ptr->radii[0]) {
         return false;
     }
     // check static obstacles constraints
-    for (const auto &obstacle : env->obstacles) {
-        if (obstacle->constrained(point, env->radii[0])) {
+    for (const auto &obstacle : env_ptr->obstacles) {
+        if (obstacle->constrained(point, env_ptr->radii[0])) {
             return false;
         }
     }
     // check dynamic obstacles constraints
+    for (auto occupied_agent_id = 0; occupied_agent_id < constraint_table_ptr->path_table.size(); ++occupied_agent_id) {
+        if (constraint_table_ptr->path_table[occupied_agent_id].empty()) continue;
+        for (int i = 0; i < constraint_table_ptr->path_table[occupied_agent_id].size() - 1; ++i) {
+            auto [prev_point, prev_time] = constraint_table_ptr->path_table[occupied_agent_id][i];
+            auto [next_point, next_time] = constraint_table_ptr->path_table[occupied_agent_id][i + 1];
+
+            // check if temporal constraint is satisfied
+            if (prev_time > t || t >= next_time)
+                continue;
+
+            // check if spatial constraint is satisfied
+            // if (calculateDistance(point, prev_point) >= env_ptr->radii[0] + calculateDistance(prev_point, next_point) + env_ptr->radii[0])
+            //     continue;
+
+            const auto expand_time = t - prev_time;
+            const auto theta = atan2(get<1>(next_point) - get<1>(prev_point), get<0>(next_point) - get<0>(prev_point));
+            assert(expand_time >= 0.0);
+            auto agent_point = prev_point;
+            if (theta != 0.0) {
+                agent_point =
+                    make_tuple(get<0>(prev_point) + env_ptr->velocities[occupied_agent_id] * cos(theta) * expand_time, get<1>(prev_point) + env_ptr->velocities[occupied_agent_id] * sin(theta) * expand_time);
+            }
+            if (calculateDistance(point, agent_point) < env_ptr->radii[0] + env_ptr->radii[occupied_agent_id]) {
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -127,12 +156,12 @@ public:
         Point point2 = make_tuple(state2Pos->values[0], state2Pos->values[1]);
         const double expand_distance = calculateDistance(point1, point2);
         const double theta = atan2(get<1>(point2) - get<1>(point1), get<0>(point2) - get<0>(point1));
-        const auto timesteps = static_cast<int>(floor(expand_distance / env->velocities[0]));
+        const auto timesteps = static_cast<int>(floor(expand_distance / env_ptr->velocities[0]));
         for (int timestep = 0; timestep < timesteps; ++timestep) {
             Point interpolated_point = point1;
             if (theta != 0.0) {
-                interpolated_point = make_tuple(get<0>(point1) + env->velocities[0] * cos(theta) * timestep,
-                                                get<1>(point1) + env->velocities[0] * sin(theta) * timestep);
+                interpolated_point = make_tuple(get<0>(point1) + env_ptr->velocities[0] * cos(theta) * timestep,
+                                                get<1>(point1) + env_ptr->velocities[0] * sin(theta) * timestep);
             }
             // new ob state
             ob::State *interpolated_state = stateSpace_->as<ob::SpaceTimeStateSpace>()->allocState();
@@ -144,7 +173,7 @@ public:
                 return false;
             }
         }
-        const double remain_time = fmod(expand_distance, env->velocities[0]);
+        const double remain_time = fmod(expand_distance, env_ptr->velocities[0]);
         if (remain_time > 0.001) {
             const Point interpolated_point = point2;
             // new ob state
@@ -172,11 +201,11 @@ private:
     ob::StateSpace *stateSpace_; // the animation state space for distance calculation
 };
 
-void plan(void)
+Path plan(int agent_id)
 {
     // construct the state space we are planning in
     auto vectorSpace(std::make_shared<ob::RealVectorStateSpace>(2));
-    auto space = std::make_shared<ob::SpaceTimeStateSpace>(vectorSpace, env->velocities[0]);
+    auto space = std::make_shared<ob::SpaceTimeStateSpace>(vectorSpace, env_ptr->velocities[agent_id]);
 
     // set the bounds for R1
     ob::RealVectorBounds bounds(2);
@@ -199,13 +228,13 @@ void plan(void)
 
     // create a start state
     ob::ScopedState<> start(space);
-    start[0] = 1.0; // pos
-    start[1] = 1.0; // time
+    start[0] = get<0>(env_ptr->start_points[agent_id]);
+    start[1] = get<1>(env_ptr->start_points[agent_id]);
 
     // create a goal state
     ob::ScopedState<> goal(space);
-    goal[0] = 38.0; // pos
-    goal[1] = 38.0; // pos
+    goal[0] = get<0>(env_ptr->goal_points[agent_id]);
+    goal[1] = get<1>(env_ptr->goal_points[agent_id]);
 
     // set the start and goal states
     ss.setStartAndGoalStates(start, goal);
@@ -214,7 +243,7 @@ void plan(void)
     auto *strrtStar = new og::STRRTstar(si);
 
     // set planner parameters
-    strrtStar->setRange(env->max_expand_distances[0]);
+    strrtStar->setRange(env_ptr->max_expand_distances[agent_id]);
 
     // set the used planner
     ss.setPlanner(ob::PlannerPtr(strrtStar));
@@ -237,12 +266,12 @@ void plan(void)
             Point point = make_tuple(x, y);
             path.emplace_back(make_tuple(point, t));
         }
-        solution.emplace_back(path);
-        saveSolution(solution, solutionPath);
+        return path;
     }
-    else
+    else {
         std::cout << "No solution found" << std::endl;
-
+        return {};
+    }
 }
 
 int main(int argc, char ** argv)
@@ -310,12 +339,23 @@ int main(int argc, char ** argv)
         iterations.emplace_back(1500);
         goal_sample_rates.emplace_back(10.0);
     }
-    env = make_shared<SharedEnv>(num_of_agents, width, height, start_points, goal_points, radii, max_expand_distances,
-                                 velocities, iterations, goal_sample_rates, obstacles);
+    auto env = SharedEnv(num_of_agents, width, height, start_points, goal_points, radii, max_expand_distances, velocities, iterations, goal_sample_rates, obstacles);
+    env_ptr = &env;
+    ConstraintTable constraint_table(env);
+    constraint_table_ptr = &constraint_table;
 
     std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
 
-    plan();
+    double sum_of_costs = 0.0;
+    double makespan = 0.0;
+    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id) {
+        auto path = plan(agent_id);
+        solution.emplace_back(path);
+        sum_of_costs += get<1>(path.back());
+        makespan = max(makespan, get<1>(path.back()));
+        constraint_table.path_table[agent_id] = path;
+    }
+    saveSolution(solution, solutionPath);
 
     return 0;
 }
