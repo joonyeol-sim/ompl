@@ -119,6 +119,7 @@ void ompl::geometric::STRRTstar::freeMemory()
 
 ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::PlannerTerminationCondition &ptc)
 {
+    auto start_time = std::chrono::high_resolution_clock::now();
     checkValidity();
     auto *goal = dynamic_cast<ompl::base::GoalSampleableRegion *>(pdef_->getGoal().get());
 
@@ -378,8 +379,12 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
             if (newSolution && goal->isStartGoalPairValid(startMotion->root, goalMotion->root))
             {
                 constructSolution(startMotion, goalMotion, intermediateSolutionCallback, ptc);
-                std::cout << bestTime_ << std::endl;
+                std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
+                std::cout << "Best earliest arrival time : " << bestTime_ << std::endl;
+                std::cout << "Elapsed time : " << duration.count() << std::endl;
                 solved = true;
+                if (numIterations_ > 1500)
+                    break;
                 if (ptc || upperTimeBound_ == minimumTime_)
                     break;  // first solution is enough or optimal solution is found
                 // continue to look for solutions with the narrower time bound until the termination condition is met
@@ -1064,6 +1069,7 @@ bool ompl::geometric::STRRTstar::sampleGoalTime(ompl::base::State *goal, double 
     double ltb, utb;
     double minTime =
         si_->getStateSpace()->as<ompl::base::SpaceTimeStateSpace>()->timeToCoverDistance(startMotion_->state, goal);
+    minTime = std::max(minTime, goalTime_);
     if (isTimeBounded_)
     {
         ltb = minTime;
@@ -1166,6 +1172,16 @@ std::string ompl::geometric::STRRTstar::getRewiringState() const
 void ompl::geometric::STRRTstar::setRewiringToOff()
 {
     rewireState_ = OFF;
+}
+
+void ompl::geometric::STRRTstar::setGoalTime(double goalTime)
+{
+    goalTime_ = goalTime;
+}
+
+void ompl::geometric::STRRTstar::setAgentIndex(int agentIndex)
+{
+    agentIndex_ = agentIndex;
 }
 
 void ompl::geometric::STRRTstar::setRewiringToRadius()

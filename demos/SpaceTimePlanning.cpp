@@ -48,6 +48,9 @@
 #include "ConstraintTable.h"
 #include "constraint/ConstrainedPlanningCommon.h"
 
+
+#include <boost/xpressive/detail/core/access.hpp>
+
 using namespace std;
 
 namespace ob = ompl::base;
@@ -89,29 +92,36 @@ bool isStateValid(const ob::State *state)
     // check dynamic obstacles constraints
     for (auto occupied_agent_id = 0; occupied_agent_id < constraint_table_ptr->path_table.size(); ++occupied_agent_id) {
         if (constraint_table_ptr->path_table[occupied_agent_id].empty()) continue;
+        // path conflict
         for (int i = 0; i < constraint_table_ptr->path_table[occupied_agent_id].size() - 1; ++i) {
             auto [prev_point, prev_time] = constraint_table_ptr->path_table[occupied_agent_id][i];
             auto [next_point, next_time] = constraint_table_ptr->path_table[occupied_agent_id][i + 1];
 
             // check if temporal constraint is satisfied
-            if (prev_time > t || t >= next_time)
+            if (prev_time > t || t > next_time)
                 continue;
 
-            // check if spatial constraint is satisfied
-            // if (calculateDistance(point, prev_point) >= env_ptr->radii[0] + calculateDistance(prev_point, next_point) + env_ptr->radii[0])
-            //     continue;
-
-            const auto expand_time = t - prev_time;
-            const auto theta = atan2(get<1>(next_point) - get<1>(prev_point), get<0>(next_point) - get<0>(prev_point));
+            const double expand_distance = calculateDistance(prev_point, next_point);
+            const double expand_time = t - prev_time;
+            const double theta = atan2(get<1>(next_point) - get<1>(prev_point), get<0>(next_point) - get<0>(prev_point));
+            const double velocity = expand_distance / (next_time - prev_time);
             assert(expand_time >= 0.0);
             auto agent_point = prev_point;
             if (theta != 0.0) {
-                agent_point =
-                    make_tuple(get<0>(prev_point) + env_ptr->velocities[occupied_agent_id] * cos(theta) * expand_time, get<1>(prev_point) + env_ptr->velocities[occupied_agent_id] * sin(theta) * expand_time);
+                agent_point = make_tuple(get<0>(prev_point) + velocity * cos(theta) * expand_time,
+                                         get<1>(prev_point) + velocity * sin(theta) * expand_time);
             }
             if (calculateDistance(point, agent_point) < env_ptr->radii[0] + env_ptr->radii[occupied_agent_id]) {
                 return false;
             }
+        }
+        // target conflict
+        auto [last_point, last_time] = constraint_table_ptr->path_table[occupied_agent_id].back();
+        // check if temporal constraint is satisfied
+        if (last_time > t)
+            continue;
+        if (calculateDistance(point, last_point) < env_ptr->radii[0] + env_ptr->radii[occupied_agent_id]) {
+            return false;
         }
     }
     return true;
@@ -156,12 +166,13 @@ public:
         Point point2 = make_tuple(state2Pos->values[0], state2Pos->values[1]);
         const double expand_distance = calculateDistance(point1, point2);
         const double theta = atan2(get<1>(point2) - get<1>(point1), get<0>(point2) - get<0>(point1));
-        const auto timesteps = static_cast<int>(floor(expand_distance / env_ptr->velocities[0]));
-        for (int timestep = 0; timestep < timesteps; ++timestep) {
+        const double velocity = expand_distance / (state2Time->position - state1Time->position);
+        const auto timesteps = static_cast<int>(floor(expand_distance / velocity));
+        for (double timestep = 0.0; timestep < timesteps; timestep += 0.5) {
             Point interpolated_point = point1;
             if (theta != 0.0) {
-                interpolated_point = make_tuple(get<0>(point1) + env_ptr->velocities[0] * cos(theta) * timestep,
-                                                get<1>(point1) + env_ptr->velocities[0] * sin(theta) * timestep);
+                interpolated_point = make_tuple(get<0>(point1) + velocity * cos(theta) * timestep,
+                                                get<1>(point1) + velocity * sin(theta) * timestep);
             }
             // new ob state
             ob::State *interpolated_state = stateSpace_->as<ob::SpaceTimeStateSpace>()->allocState();
@@ -173,7 +184,7 @@ public:
                 return false;
             }
         }
-        const double remain_time = fmod(expand_distance, env_ptr->velocities[0]);
+        const double remain_time = fmod(expand_distance, velocity);
         if (remain_time > 0.001) {
             const Point interpolated_point = point2;
             // new ob state
@@ -200,6 +211,40 @@ private:
     double vMax_; // maximum velocity
     ob::StateSpace *stateSpace_; // the animation state space for distance calculation
 };
+
+double getEarliestGoalArrivalTime(Point goal_point) {
+    double earliest_goal_arrival_time = 0.0;
+    for (auto occupied_agent_id = 0; occupied_agent_id < constraint_table_ptr->path_table.size(); ++occupied_agent_id) {
+        if (constraint_table_ptr->path_table[occupied_agent_id].empty()) continue;
+        for (int i = 0; i < constraint_table_ptr->path_table[occupied_agent_id].size() - 1; ++i) {
+            auto [prev_point, prev_time] = constraint_table_ptr->path_table[occupied_agent_id][i];
+            auto [next_point, next_time] = constraint_table_ptr->path_table[occupied_agent_id][i + 1];
+
+            const double expand_distance = calculateDistance(prev_point, next_point);
+            const double theta = atan2(get<1>(next_point) - get<1>(prev_point), get<0>(next_point) - get<0>(prev_point));
+            const double velocity = expand_distance / (next_time - prev_time);
+            const auto timesteps = static_cast<int>(floor(expand_distance / velocity));
+            for (double timestep = 0.0; timestep < timesteps; timestep += 0.5) {
+                Point interpolated_point = prev_point;
+                if (theta != 0.0) {
+                    interpolated_point = make_tuple(get<0>(prev_point) + velocity * cos(theta) * timestep,
+                                                    get<1>(prev_point) + velocity * sin(theta) * timestep);
+                }
+                if (calculateDistance(interpolated_point, goal_point) < env_ptr->radii[occupied_agent_id] + env_ptr->radii[0]) {
+                    earliest_goal_arrival_time = max(earliest_goal_arrival_time, prev_time + timestep + 1.0);
+                }
+            }
+            const double remain_time = fmod(expand_distance, velocity);
+            if (remain_time > 0.001) {
+                const Point interpolated_point = next_point;
+                if (calculateDistance(interpolated_point, goal_point) < env_ptr->radii[occupied_agent_id] + env_ptr->radii[0]) {
+                    earliest_goal_arrival_time = max(earliest_goal_arrival_time, next_time + 1.0);
+                }
+            }
+        }
+    }
+    return earliest_goal_arrival_time;
+}
 
 Path plan(int agent_id)
 {
@@ -248,8 +293,11 @@ Path plan(int agent_id)
     // set the used planner
     ss.setPlanner(ob::PlannerPtr(strrtStar));
 
+    double earliest_goal_arrival_time = getEarliestGoalArrivalTime(make_tuple(goal[0], goal[1]));
+    strrtStar->setGoalTime(earliest_goal_arrival_time);
+    strrtStar->setAgentIndex(agent_id);
     // attempt to solve the problem within one second of planning time
-    ob::PlannerStatus solved = ss.solve(1.0);
+    ob::PlannerStatus solved = ss.solve(300.0);
 
     if (solved)
     {

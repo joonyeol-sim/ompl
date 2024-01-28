@@ -47,6 +47,7 @@
 #include <ompl/tools/config/SelfConfig.h>
 #include <ompl/util/GeometricEquations.h>
 #include <boost/math/constants/constants.hpp>
+#include <chrono>
 
 namespace ompl
 {
@@ -99,6 +100,10 @@ namespace ompl
 
             /** \brief Do not rewire at all. */
             void setRewiringToOff();
+
+            void setGoalTime(double goalTime);
+
+            void setAgentIndex(int agentIndex);
 
             /** \brief Rewire by radius. */
             void setRewiringToRadius();
@@ -198,6 +203,10 @@ namespace ompl
 
             /** \brief The goal tree */
             TreeData tGoal_;
+
+            double goalTime_ = 0.0;
+
+            int agentIndex_;
 
             /** \brief The maximum length of a motion to be added to a tree */
             double maxDistance_{0.};
