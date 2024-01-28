@@ -193,6 +193,8 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
 
     while (!ptc)
     {
+        if (numBatchSamples > 1500)
+            break;
         numIterations_++;
         TreeData &tree = startTree ? tStart_ : tGoal_;
         tgi.start = startTree;
@@ -380,11 +382,9 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
             {
                 constructSolution(startMotion, goalMotion, intermediateSolutionCallback, ptc);
                 std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
-                std::cout << "Best earliest arrival time : " << bestTime_ << std::endl;
-                std::cout << "Elapsed time : " << duration.count() << std::endl;
+                // std::cout << "Best earliest arrival time : " << bestTime_ << std::endl;
+                // std::cout << "Elapsed time : " << duration.count() << std::endl;
                 solved = true;
-                if (numIterations_ > 1500)
-                    break;
                 if (ptc || upperTimeBound_ == minimumTime_)
                     break;  // first solution is enough or optimal solution is found
                 // continue to look for solutions with the narrower time bound until the termination condition is met

@@ -394,15 +394,24 @@ int main(int argc, char ** argv)
 
     std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
 
+    auto start_time = std::chrono::high_resolution_clock::now();
     double sum_of_costs = 0.0;
     double makespan = 0.0;
     for (int agent_id = 0; agent_id < num_of_agents; ++agent_id) {
         auto path = plan(agent_id);
+        if (path.empty()) {
+            cout << "Agent " << agent_id << " failed to find a path" << endl;
+            return 0;
+        }
         solution.emplace_back(path);
         sum_of_costs += get<1>(path.back());
         makespan = max(makespan, get<1>(path.back()));
         constraint_table.path_table[agent_id] = path;
     }
+    std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
+    cout << "sum_of_costs: " << sum_of_costs << endl;
+    cout << "makespan: " << makespan << endl;
+    cout << "duration: " << duration.count() << endl;
     saveSolution(solution, solutionPath);
 
     return 0;
