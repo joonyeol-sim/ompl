@@ -314,6 +314,16 @@ Path plan(int agent_id)
             Point point = make_tuple(x, y);
             path.emplace_back(make_tuple(point, t));
         }
+        Point start = make_tuple(get<0>(env_ptr->start_points[agent_id]), get<1>(env_ptr->start_points[agent_id]));
+        Point goal = make_tuple(get<0>(env_ptr->goal_points[agent_id]), get<1>(env_ptr->goal_points[agent_id]));
+        if (calculateDistance(start, get<0>(path.front())) >= 0.001) {
+            cout << "Start point is not on the path" << endl;
+            return {};
+        }
+        if (calculateDistance(goal, get<0>(path.back())) >= 0.001) {
+            cout << "Goal point is not on the path" << endl;
+            return {};
+        }
         return path;
     }
     else {
@@ -394,16 +404,30 @@ int main(int argc, char ** argv)
 
     std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
 
+    auto start_time = std::chrono::high_resolution_clock::now();
     double sum_of_costs = 0.0;
     double makespan = 0.0;
-    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id) {
+    for (int agent_id = 0; agent_id < 30; ++agent_id) {
+        cout << "Agent " << agent_id << endl;
         auto path = plan(agent_id);
         solution.emplace_back(path);
         sum_of_costs += get<1>(path.back());
         makespan = max(makespan, get<1>(path.back()));
         constraint_table.path_table[agent_id] = path;
     }
+
+    start_points[31] = make_tuple(1.0, 1.0);
+    goal_points[31] = make_tuple(39.0, 39.0);
+    env.start_points[31] = start_points[31];
+    env.goal_points[31] = goal_points[31];
+    cout << "Lower bound: " << calculateDistance(start_points[31], goal_points[31]) * 2 << endl;
+    auto path = plan(31);
+    solution.emplace_back(path);
+
+
+    std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
     saveSolution(solution, solutionPath);
+    saveData(sum_of_costs, makespan, duration.count(), dataPath);
 
     return 0;
 }
