@@ -193,8 +193,11 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
 
     while (!ptc)
     {
-        if (numBatchSamples > 1500)
+        if (numIterations_ > 1500 || tStart_->size() + tGoal_->size() > 1500) {
+            std::cout << "State size : " << tStart_->size() + tGoal_->size() << std::endl;
+            std::cout << "Number of iterations : " << numIterations_ << std::endl;
             break;
+        }
         numIterations_++;
         TreeData &tree = startTree ? tStart_ : tGoal_;
         tgi.start = startTree;
