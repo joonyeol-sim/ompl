@@ -65,6 +65,7 @@ string benchmarkPath;
 string solutionPath;
 string dataPath;
 Solution solution;
+double time_resolution = 0.5;
 double width = 40.0;
 double height = 40.0;
 
@@ -168,7 +169,7 @@ public:
         const double theta = atan2(get<1>(point2) - get<1>(point1), get<0>(point2) - get<0>(point1));
         const double velocity = expand_distance / (state2Time->position - state1Time->position);
         const auto timesteps = static_cast<int>(floor(expand_distance / velocity));
-        for (double timestep = 0.0; timestep < timesteps; timestep += 0.5) {
+        for (double timestep = 0.0; timestep < timesteps; timestep += time_resolution) {
             Point interpolated_point = point1;
             if (theta != 0.0) {
                 interpolated_point = make_tuple(get<0>(point1) + velocity * cos(theta) * timestep,
@@ -224,7 +225,7 @@ double getEarliestGoalArrivalTime(Point goal_point) {
             const double theta = atan2(get<1>(next_point) - get<1>(prev_point), get<0>(next_point) - get<0>(prev_point));
             const double velocity = expand_distance / (next_time - prev_time);
             const auto timesteps = static_cast<int>(floor(expand_distance / velocity));
-            for (double timestep = 0.0; timestep < timesteps; timestep += 0.5) {
+            for (double timestep = 0.0; timestep < timesteps; timestep += time_resolution) {
                 Point interpolated_point = prev_point;
                 if (theta != 0.0) {
                     interpolated_point = make_tuple(get<0>(prev_point) + velocity * cos(theta) * timestep,

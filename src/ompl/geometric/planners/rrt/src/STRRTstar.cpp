@@ -570,7 +570,7 @@ void ompl::geometric::STRRTstar::increaseTimeBound(bool hasSameBounds, double &o
         batchSize =
             std::ceil(2.0 * (timeBoundFactorIncrease_ - 1.0) * static_cast<double>(tStart_->size() + tGoal_->size()));
     numBatchSamples = 0;
-    // OMPL_INFORM("%s: Increased time bound factor to %.2f", getName().c_str(), newBatchTimeBoundFactor);
+    OMPL_INFORM("%s: Increased time bound factor to %.2f", getName().c_str(), newBatchTimeBoundFactor);
 }
 
 void ompl::geometric::STRRTstar::constructSolution(
@@ -1072,7 +1072,6 @@ bool ompl::geometric::STRRTstar::sampleGoalTime(ompl::base::State *goal, double 
     double ltb, utb;
     double minTime =
         si_->getStateSpace()->as<ompl::base::SpaceTimeStateSpace>()->timeToCoverDistance(startMotion_->state, goal);
-    minTime = std::max(minTime, goalTime_);
     if (isTimeBounded_)
     {
         ltb = minTime;
@@ -1093,6 +1092,7 @@ bool ompl::geometric::STRRTstar::sampleGoalTime(ompl::base::State *goal, double 
         return false;  // goal can't be reached in time
 
     double time = ltb == utb ? ltb : rng_.uniformReal(ltb, utb);
+    time = std::max(time, goalTime_);
     goal->as<ompl::base::CompoundState>()->as<ompl::base::TimeStateSpace::StateType>(1)->position = time;
     return true;
 }
