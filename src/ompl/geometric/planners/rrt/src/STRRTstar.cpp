@@ -119,6 +119,8 @@ void ompl::geometric::STRRTstar::freeMemory()
 
 ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::PlannerTerminationCondition &ptc)
 {
+    size_t maxSamples = 0;
+    maxSamples = std::max(maxSamples, tStart_->size() + tGoal_->size());
     auto start_time = std::chrono::high_resolution_clock::now();
     checkValidity();
     auto *goal = dynamic_cast<ompl::base::GoalSampleableRegion *>(pdef_->getGoal().get());
@@ -193,7 +195,7 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
 
     while (!ptc)
     {
-        if (solved && numIterations_ > 1500) {
+        if (solved && totalSamplesGenerated_ > 10000) {
             // std::cout << "State size : " << tStart_->size() + tGoal_->size() << std::endl;
             // std::cout << "Number of iterations : " << numIterations_ << std::endl;
             break;
@@ -294,6 +296,7 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
                 std::min(minimumTime_, si_->getStateSpace()->as<ompl::base::SpaceTimeStateSpace>()->timeToCoverDistance(
                                            startMotion_->state, goalState));
             numBatchSamples++;
+            totalSamplesGenerated_++;
         }
 
         // *** End Goal Sampling ***
@@ -310,6 +313,7 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
         GrowState gs = growTree(tree, tgi, rmotion, nbh, false);
         if (gs != TRAPPED)
         {
+            totalSamplesGenerated_++;
             numBatchSamples++;
             /* remember which motion was just added */
             Motion *addedMotion = tgi.xmotion;
@@ -385,8 +389,9 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
             {
                 constructSolution(startMotion, goalMotion, intermediateSolutionCallback, ptc);
                 std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
-                // std::cout << "Best earliest arrival time : " << bestTime_ << std::endl;
-                // std::cout << "Elapsed time : " << duration.count() << std::endl;
+                std::cout << "Best arrival time : " << bestTime_ << std::endl;
+                std::cout << "Elapsed time : " << duration.count() << std::endl;
+                std::cout << "Samples : " << totalSamplesGenerated_ << std::endl;
                 solved = true;
                 if (ptc || upperTimeBound_ == minimumTime_)
                     break;  // first solution is enough or optimal solution is found

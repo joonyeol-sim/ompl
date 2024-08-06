@@ -323,6 +323,33 @@ Path plan(int agent_id)
     }
 }
 
+Solution readSolutionFile(const string& solutionPath) {
+    Solution solution;
+    ifstream file(solutionPath);
+    string line;
+
+    while (getline(file, line)) {
+        Path agentPath;
+        istringstream iss(line);
+        string token;
+
+        getline(iss, token, ':'); // Skip agent number
+        getline(iss, token);
+
+        istringstream pathStream(token);
+        while (getline(pathStream, token, '>')) {
+            if (token.empty()) continue;
+            double x, y, t;
+            sscanf(token.c_str(), "(%lf,%lf,%lf)", &x, &y, &t);
+            agentPath.emplace_back(make_tuple(make_tuple(x, y), t));
+        }
+
+        solution.push_back(agentPath);
+    }
+
+    return solution;
+}
+
 int main(int argc, char ** argv)
 {
     string mapname;
@@ -361,59 +388,69 @@ int main(int argc, char ** argv)
             obstacles.emplace_back(make_shared<RectangularObstacle>(center[0], center[1], width, height));
         }
     }
+    // Read solution from file
+    Solution existing_solution = readSolutionFile("rect20.txt");
+
+    int num_of_agents = existing_solution.size() + 1;  // Add one more agent
     vector<Point> start_points;
     vector<Point> goal_points;
-    for (size_t i = 0; i < config["startPoints"].size(); ++i) {
-        auto start = config["startPoints"][i].as<std::vector<double>>();
-        auto goal = config["goalPoints"][i].as<std::vector<double>>();
-        start_points.emplace_back(start[0], start[1]);
-        goal_points.emplace_back(goal[0], goal[1]);
+
+    // Add start and goal points for existing agents
+    for (const auto& path : existing_solution) {
+        start_points.push_back(get<0>(path.front()));
+        goal_points.push_back(get<0>(path.back()));
     }
-    int num_of_agents = config["agentNum"].as<int>();
-    int width = 40;
-    int height = 40;
-    vector<double> radii;
-    vector<double> max_expand_distances;
-    vector<double> max_velocities;
-    vector<double> thresholds;
-    vector<int> iterations;
-    vector<double> goal_sample_rates;
-    // srand(time(0));
-    for (int i = 0; i < num_of_agents; ++i) {
-        // double randomValue = 0.25 + static_cast<double>(rand()) / (static_cast<double>(RAND_MAX / (1 - 0.25)));
-        radii.emplace_back(0.5);
-        max_expand_distances.emplace_back(5.0);
-        max_velocities.emplace_back(0.5);
-        thresholds.emplace_back(0.01);
-        iterations.emplace_back(1500);
-        goal_sample_rates.emplace_back(10.0);
-    }
+
+    // Add new agent
+    start_points.emplace_back(1, 1);
+    goal_points.emplace_back(39, 39);
+
+    vector<double> radii(num_of_agents, 0.5);
+    vector<double> max_expand_distances(num_of_agents, 5.0);
+    vector<double> max_velocities(num_of_agents, 0.5);
+    vector<double> thresholds(num_of_agents, 0.01);
+    vector<int> iterations(num_of_agents, 1500);
+    vector<double> goal_sample_rates(num_of_agents, 10.0);
+
     auto env = SharedEnv(num_of_agents, width, height, start_points, goal_points, radii, max_expand_distances, max_velocities, iterations, goal_sample_rates, obstacles, "strrt");
     env_ptr = &env;
     ConstraintTable constraint_table(env);
     constraint_table_ptr = &constraint_table;
 
+    // Add paths from existing solution to constraint_table
+    for (int i = 0; i < existing_solution.size(); ++i) {
+        constraint_table.path_table[i] = existing_solution[i];
+    }
+
     std::cout << "OMPL version: " << OMPL_VERSION << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
+
+    // Plan for the new agent
+    int new_agent_id = existing_solution.size();
+    auto new_path = plan(new_agent_id);
+    if (new_path.empty()) {
+        cout << "New agent failed to find a path" << endl;
+        return 0;
+    }
+    existing_solution.push_back(new_path);
+
+    std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
+
+    // Calculate metrics
     double sum_of_costs = 0.0;
     double makespan = 0.0;
-    for (int agent_id = 0; agent_id < num_of_agents; ++agent_id) {
-        auto path = plan(agent_id);
-        if (path.empty()) {
-            cout << "Agent " << agent_id << " failed to find a path" << endl;
-            return 0;
+    for (const auto& path : existing_solution) {
+        if (!path.empty()) {
+            sum_of_costs += get<1>(path.back());
+            makespan = max(makespan, get<1>(path.back()));
         }
-        solution.emplace_back(path);
-        sum_of_costs += get<1>(path.back());
-        makespan = max(makespan, get<1>(path.back()));
-        constraint_table.path_table[agent_id] = path;
     }
-    std::chrono::duration<double, std::ratio<1>> duration = std::chrono::high_resolution_clock::now() - start_time;
+
     cout << "sum_of_costs: " << sum_of_costs << endl;
     cout << "makespan: " << makespan << endl;
     cout << "duration: " << duration.count() << endl;
-    saveSolution(solution, solutionPath);
+    saveSolution(existing_solution, solutionPath);
     saveData(sum_of_costs, makespan, duration.count(), dataPath);
 
     return 0;

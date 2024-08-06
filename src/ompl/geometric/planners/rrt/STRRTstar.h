@@ -66,6 +66,7 @@ namespace ompl
         class STRRTstar : public base::Planner
         {
         public:
+            size_t totalSamplesGenerated_ = 0;
             using Motion = base::ConditionalStateSampler::Motion;
 
             /** \brief Constructor */
