@@ -31,7 +31,7 @@ run_test() {
   fi
 }
 
-export LD_LIBRARY_PATH=$HOME/CLionProjects/ompl/build/src/ompl:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$(pwd)/build/src/ompl:$LD_LIBRARY_PATH
 # Loop through all combinations of parameters and run tests
 for env in "${environments[@]}"; do
   if [ "$env" == "Free" ]; then
