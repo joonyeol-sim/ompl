@@ -53,9 +53,9 @@ if (OMPL_BUILD_DEMOS)
     add_ompl_demo(demo_MultiLevelPlanningHyperCube multilevel/MultiLevelPlanningHyperCube.cpp)
     add_ompl_demo(demo_MultiLevelPlanningHyperCubeBenchmark multilevel/MultiLevelPlanningHyperCubeBenchmark.cpp)
 
-    add_ompl_demo(demo_SpaceTimePlanning SpaceTimePlanning.cpp)
-
     find_package(yaml-cpp CONFIG)
+    set(COMMON_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common.cpp)
+    add_ompl_demo(demo_SpaceTimePlanning SpaceTimePlanning.cpp ${COMMON_SRC})
     target_link_libraries(demo_SpaceTimePlanning PRIVATE yaml-cpp::yaml-cpp)
 
 #    find_package(yaml-cpp CONFIG)

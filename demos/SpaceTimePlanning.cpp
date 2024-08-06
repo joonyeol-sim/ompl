@@ -250,7 +250,7 @@ Path plan(int agent_id)
 {
     // construct the state space we are planning in
     auto vectorSpace(std::make_shared<ob::RealVectorStateSpace>(2));
-    auto space = std::make_shared<ob::SpaceTimeStateSpace>(vectorSpace, env_ptr->velocities[agent_id]);
+    auto space = std::make_shared<ob::SpaceTimeStateSpace>(vectorSpace, env_ptr->max_velocities[agent_id]);
 
     // set the bounds for R1
     ob::RealVectorBounds bounds(2);
@@ -301,7 +301,7 @@ Path plan(int agent_id)
 
     if (solved)
     {
-        std::cout << "Found solution:" << std::endl;
+        // std::cout << "Found solution:" << std::endl;
         // print the path to screen
         // ss.getSolutionPath().print(std::cout);
         auto ompl_path = ss.getSolutionPath();
@@ -373,7 +373,7 @@ int main(int argc, char ** argv)
     int height = 40;
     vector<double> radii;
     vector<double> max_expand_distances;
-    vector<double> velocities;
+    vector<double> max_velocities;
     vector<double> thresholds;
     vector<int> iterations;
     vector<double> goal_sample_rates;
@@ -382,12 +382,12 @@ int main(int argc, char ** argv)
         // double randomValue = 0.25 + static_cast<double>(rand()) / (static_cast<double>(RAND_MAX / (1 - 0.25)));
         radii.emplace_back(0.5);
         max_expand_distances.emplace_back(5.0);
-        velocities.emplace_back(0.5);
+        max_velocities.emplace_back(0.5);
         thresholds.emplace_back(0.01);
         iterations.emplace_back(1500);
         goal_sample_rates.emplace_back(10.0);
     }
-    auto env = SharedEnv(num_of_agents, width, height, start_points, goal_points, radii, max_expand_distances, velocities, iterations, goal_sample_rates, obstacles);
+    auto env = SharedEnv(num_of_agents, width, height, start_points, goal_points, radii, max_expand_distances, max_velocities, iterations, goal_sample_rates, obstacles, "strrt");
     env_ptr = &env;
     ConstraintTable constraint_table(env);
     constraint_table_ptr = &constraint_table;
@@ -413,6 +413,7 @@ int main(int argc, char ** argv)
     cout << "makespan: " << makespan << endl;
     cout << "duration: " << duration.count() << endl;
     saveSolution(solution, solutionPath);
+    saveData(sum_of_costs, makespan, duration.count(), dataPath);
 
     return 0;
 }

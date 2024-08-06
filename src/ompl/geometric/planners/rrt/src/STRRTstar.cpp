@@ -150,8 +150,8 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
         return ompl::base::PlannerStatus::INVALID_GOAL;
     }
 
-    OMPL_INFORM("%s: Starting planning with %d states already in datastructure", getName().c_str(),
-                (int)(tStart_->size() + tGoal_->size()));
+    // OMPL_INFORM("%s: Starting planning with %d states already in datastructure", getName().c_str(),
+                // (int)(tStart_->size() + tGoal_->size()));
 
     TreeGrowingInfo tgi;
     tgi.xstate = si_->allocState();
@@ -189,13 +189,13 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
 
     bool forceGoalSample = true;
 
-    OMPL_INFORM("%s: Starting planning with time bound factor %.2f", getName().c_str(), newBatchTimeBoundFactor);
+    // OMPL_INFORM("%s: Starting planning with time bound factor %.2f", getName().c_str(), newBatchTimeBoundFactor);
 
     while (!ptc)
     {
         if (solved && numIterations_ > 1500) {
-            std::cout << "State size : " << tStart_->size() + tGoal_->size() << std::endl;
-            std::cout << "Number of iterations : " << numIterations_ << std::endl;
+            // std::cout << "State size : " << tStart_->size() + tGoal_->size() << std::endl;
+            // std::cout << "Number of iterations : " << numIterations_ << std::endl;
             break;
         }
         numIterations_++;
@@ -415,8 +415,8 @@ ompl::base::PlannerStatus ompl::geometric::STRRTstar::solve(const ompl::base::Pl
     si_->freeState(rstate);
     delete rmotion;
 
-    OMPL_INFORM("%s: Created %u states (%u start + %u goal)", getName().c_str(), tStart_->size() + tGoal_->size(),
-                tStart_->size(), tGoal_->size());
+    // OMPL_INFORM("%s: Created %u states (%u start + %u goal)", getName().c_str(), tStart_->size() + tGoal_->size(),
+                // tStart_->size(), tGoal_->size());
 
     if (approxsol && !solved)
     {
@@ -570,7 +570,7 @@ void ompl::geometric::STRRTstar::increaseTimeBound(bool hasSameBounds, double &o
         batchSize =
             std::ceil(2.0 * (timeBoundFactorIncrease_ - 1.0) * static_cast<double>(tStart_->size() + tGoal_->size()));
     numBatchSamples = 0;
-    OMPL_INFORM("%s: Increased time bound factor to %.2f", getName().c_str(), newBatchTimeBoundFactor);
+    // OMPL_INFORM("%s: Increased time bound factor to %.2f", getName().c_str(), newBatchTimeBoundFactor);
 }
 
 void ompl::geometric::STRRTstar::constructSolution(
